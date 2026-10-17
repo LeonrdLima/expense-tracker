@@ -2,11 +2,11 @@ package org.acme.rest;
 
 import java.util.List;
 
-import org.acme.model.Category;
 import org.acme.model.Transaction;
 import org.acme.rest.dto.TransactionRequestDTO;
+import org.acme.service.TransactionService;
 
-import jakarta.transaction.Transactional;
+import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -20,29 +20,18 @@ import jakarta.ws.rs.core.Response;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class TransactionResource {
+
+    @Inject 
+    TransactionService transactionService;
     
     @GET
     public List<Transaction> listAll() {
-        return Transaction.listAll();
+        return transactionService.listAll();
     }
 
     @POST
-    @Transactional
     public Response create(@Valid TransactionRequestDTO dto) {
-        Category category = Category.findById(dto.categoryId);
-        if(category == null) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                           .entity("Categoria não encontrada para o ID informado")
-                           .build();
-        }
-        Transaction transaction = new Transaction();
-        transaction.description = dto.description;
-        transaction.transactionType = dto.transactionType;
-        transaction.amount = dto.amount;
-        transaction.date = dto.date;
-        transaction.category = category;
-        transaction.persist();
-
+        Transaction transaction = transactionService.create(dto);
         return Response.status(Response.Status.CREATED).entity(transaction).build();
     }
 }
