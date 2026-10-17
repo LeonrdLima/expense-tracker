@@ -30,6 +30,7 @@ public class TransactionService {
         transaction.amount = dto.amount;
         transaction.date = dto.date;
         transaction.category = category;
+        transaction.beneficiary = dto.beneficiary;
         transaction.persist();
 
         return transaction;
@@ -58,7 +59,7 @@ public class TransactionService {
         for(Transaction t : transactions) {
             if(t.transactionType == TransactionType.INCOME) {
                 totalIncome = totalIncome.add(t.amount);
-            } else {
+            } else if(t.transactionType == TransactionType.EXPENSE) {
                 totalExpense = totalExpense.add(t.amount);
             }
         }

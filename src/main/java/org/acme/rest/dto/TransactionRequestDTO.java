@@ -26,4 +26,6 @@ public class TransactionRequestDTO {
     @NotNull
     public LocalDate date;
 
+    public String beneficiary;
+
 }
