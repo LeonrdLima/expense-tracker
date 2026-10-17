@@ -13,6 +13,7 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -25,8 +26,11 @@ public class TransactionResource {
     TransactionService transactionService;
     
     @GET
-    public List<Transaction> listAll() {
-        return transactionService.listAll();
+    public List<Transaction> list(
+        @QueryParam("year") Integer year,
+        @QueryParam("month") Integer month
+    ) {
+        return transactionService.list(year, month);
     }
 
     @POST

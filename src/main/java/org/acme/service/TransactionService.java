@@ -1,5 +1,6 @@
 package org.acme.service;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import org.acme.exception.CategoryNotFoundException;
@@ -33,6 +34,16 @@ public class TransactionService {
 
     public List<Transaction> listAll() {
         return Transaction.listAll();
+    }
+
+    public List<Transaction> list(Integer year, Integer month) {
+        if(year == null || month == null) {
+            return Transaction.listAll();
+        }
+        
+        LocalDate startDate = LocalDate.of(year, month, 1);
+        LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+        return Transaction.list("date between ?1 and ?2 order by date desc", startDate, endDate);
     }
     
 }
