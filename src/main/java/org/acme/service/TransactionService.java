@@ -1,11 +1,14 @@
 package org.acme.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
 import org.acme.exception.CategoryNotFoundException;
 import org.acme.model.Category;
 import org.acme.model.Transaction;
+import org.acme.model.TransactionType;
+import org.acme.rest.dto.SummaryResponseDTO;
 import org.acme.rest.dto.TransactionRequestDTO;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -44,6 +47,25 @@ public class TransactionService {
         LocalDate startDate = LocalDate.of(year, month, 1);
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
         return Transaction.list("date between ?1 and ?2 order by date desc", startDate, endDate);
+    }
+
+    public SummaryResponseDTO calculateSummary(Integer year, Integer month) {
+        List<Transaction> transactions = list(year, month);
+
+        BigDecimal totalIncome = BigDecimal.ZERO;
+        BigDecimal totalExpense = BigDecimal.ZERO;
+
+        for(Transaction t : transactions) {
+            if(t.transactionType == TransactionType.INCOME) {
+                totalIncome = totalIncome.add(t.amount);
+            } else {
+                totalExpense = totalExpense.add(t.amount);
+            }
+        }
+        
+        BigDecimal balance = totalIncome.subtract(totalExpense);
+
+        return new SummaryResponseDTO(totalIncome, totalExpense, balance);
     }
     
 }

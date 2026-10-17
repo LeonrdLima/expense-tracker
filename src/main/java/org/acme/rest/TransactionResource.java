@@ -3,6 +3,7 @@ package org.acme.rest;
 import java.util.List;
 
 import org.acme.model.Transaction;
+import org.acme.rest.dto.SummaryResponseDTO;
 import org.acme.rest.dto.TransactionRequestDTO;
 import org.acme.service.TransactionService;
 
@@ -37,5 +38,14 @@ public class TransactionResource {
     public Response create(@Valid TransactionRequestDTO dto) {
         Transaction transaction = transactionService.create(dto);
         return Response.status(Response.Status.CREATED).entity(transaction).build();
+    }
+
+    @GET
+    @Path("/summary")
+    public SummaryResponseDTO calculateSummary(
+        @QueryParam("year") Integer year,
+        @QueryParam("month") Integer month
+    ) {
+        return transactionService.calculateSummary(year, month);
     }
 }
