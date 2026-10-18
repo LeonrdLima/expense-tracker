@@ -80,4 +80,26 @@ public class TransactionService {
 
         t.delete();
     }
+
+    @Transactional 
+    public Transaction update(Long id, TransactionRequestDTO dto) {
+        Transaction transaction = Transaction.findById(id);
+        if(transaction == null) {
+            throw new TransactionNotFoundException("Transação não encontrada para o ID informado");
+        }
+
+        Category category = Category.findById(dto.categoryId);
+        if(category == null) {
+            throw new CategoryNotFoundException("Categoria não encontrada para o ID informado");
+        }
+
+        transaction.description = dto.description;
+        transaction.transactionType = dto.transactionType;
+        transaction.amount = dto.amount;
+        transaction.date = dto.date;
+        transaction.category = category;
+        transaction.beneficiary = dto.beneficiary;
+
+        return transaction;
+    }
 }
