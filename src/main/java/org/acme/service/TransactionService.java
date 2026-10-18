@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.acme.exception.CategoryNotFoundException;
+import org.acme.exception.TransactionNotFoundException;
 import org.acme.model.Category;
 import org.acme.model.Transaction;
 import org.acme.model.TransactionType;
@@ -69,4 +70,14 @@ public class TransactionService {
         return new SummaryResponseDTO(totalIncome, totalExpense, balance);
     }
     
+    @Transactional 
+    public void delete(Long id) {
+        Transaction t = Transaction.findById(id);
+        
+        if(t == null) {
+            throw new TransactionNotFoundException("Transação não encontrada para o ID informado");
+        }
+
+        t.delete();
+    }
 }

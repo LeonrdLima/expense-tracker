@@ -12,9 +12,11 @@ import org.acme.service.TransactionService;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
@@ -60,5 +62,12 @@ public class TransactionResource {
     public Response importCsv(ImportFileDTO form) {
         List<Transaction> transactions = csvImportService.importCsv(form.file);
         return Response.status(Response.Status.CREATED).entity(transactions).build();
+    }
+
+    @DELETE
+    @Path("/{id}")
+    public Response delete(@PathParam("id") Long id) {
+        transactionService.delete(id);
+        return Response.noContent().build();
     }
 }
