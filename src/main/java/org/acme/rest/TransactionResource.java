@@ -3,8 +3,10 @@ package org.acme.rest;
 import java.util.List;
 
 import org.acme.model.Transaction;
+import org.acme.rest.dto.ImportFileDTO;
 import org.acme.rest.dto.SummaryResponseDTO;
 import org.acme.rest.dto.TransactionRequestDTO;
+import org.acme.service.CsvImportService;
 import org.acme.service.TransactionService;
 
 import jakarta.inject.Inject;
@@ -25,6 +27,9 @@ public class TransactionResource {
 
     @Inject 
     TransactionService transactionService;
+
+    @Inject 
+    CsvImportService csvImportService;
     
     @GET
     public List<Transaction> list(
@@ -47,5 +52,13 @@ public class TransactionResource {
         @QueryParam("month") Integer month
     ) {
         return transactionService.calculateSummary(year, month);
+    }
+
+    @POST
+    @Path("/import")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response importCsv(ImportFileDTO form) {
+        List<Transaction> transactions = csvImportService.importCsv(form.file);
+        return Response.status(Response.Status.CREATED).entity(transactions).build();
     }
 }
