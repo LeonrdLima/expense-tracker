@@ -12,14 +12,18 @@ import java.util.List;
 import org.acme.exception.CsvImportException;
 import org.acme.model.Category;
 import org.acme.model.Transaction;
-import org.acme.model.TransactionType;
+import org.acme.rest.dto.CategorizationResult;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 @ApplicationScoped 
 public class CsvImportService {
+
+    @Inject 
+    CategorizationService categorizationService;
     
     @Transactional 
     public List<Transaction> importCsv(FileUpload file) {
@@ -45,25 +49,20 @@ public class CsvImportService {
 
     public Transaction parseTransaction(String line, Category defaultCategory) {
         String[] fields = line.split(",");
-        Transaction t = new Transaction();
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
         LocalDate date = LocalDate.parse(fields[0].trim(), formatter);
-        t.date = date;
-        
         BigDecimal rawAmount = new BigDecimal(fields[1].trim());
-        if(rawAmount.compareTo(BigDecimal.ZERO) < 0) {
-            t.transactionType = TransactionType.EXPENSE;
-            t.amount = rawAmount.abs();
-        } else {
-            t.transactionType = TransactionType.INCOME;
-            t.amount = rawAmount;
-        }
-
         String description = fields[3].trim();
-        t.description = description;
 
-        t.category = defaultCategory;
+        CategorizationResult result = categorizationService.categorize(description, rawAmount, defaultCategory);
+
+        Transaction t = new Transaction();
+        t.date = date;
+        t.description = description;
+        t.category = result.category();
+        t.transactionType = result.type();
+        t.amount = rawAmount.abs();
 
         return t;
     }

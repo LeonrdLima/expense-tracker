@@ -1,14 +1,19 @@
 package org.acme.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.acme.exception.CategoryNotFoundException;
 import org.acme.exception.TransactionNotFoundException;
 import org.acme.model.Category;
 import org.acme.model.Transaction;
 import org.acme.model.TransactionType;
+import org.acme.rest.dto.CategorySummaryDTO;
 import org.acme.rest.dto.SummaryResponseDTO;
 import org.acme.rest.dto.TransactionRequestDTO;
 
@@ -102,4 +107,43 @@ public class TransactionService {
 
         return transaction;
     }
+
+    public List<CategorySummaryDTO> getExpensesByCategory(Integer year, Integer month) {
+        List<Transaction> transactions = list(year, month);
+        Map<String, BigDecimal> categoryTotals = new HashMap<>();
+
+        for(Transaction t : transactions) {
+            if(t.transactionType == TransactionType.EXPENSE) {
+                String categoryName = t.category.name;
+                BigDecimal current = categoryTotals.getOrDefault(categoryName, BigDecimal.ZERO);
+                categoryTotals.put(categoryName, current.add(t.amount));
+            }
+        }
+        
+        BigDecimal totalExpense = BigDecimal.ZERO;
+        for(BigDecimal amount : categoryTotals.values()) {
+            totalExpense = totalExpense.add(amount);
+        }
+
+        List<CategorySummaryDTO> result = new ArrayList<>();
+        
+        for(Map.Entry<String, BigDecimal> entry : categoryTotals.entrySet()) {
+            String categoryName = entry.getKey();
+            BigDecimal amount = entry.getValue();
+
+            Double percentage = 0.0;
+
+            if(totalExpense.compareTo(BigDecimal.ZERO) > 0) {
+                double rawPercentage = (amount.doubleValue() / totalExpense.doubleValue()) * 100.0;
+                percentage = BigDecimal.valueOf(rawPercentage)
+                                       .setScale(2, RoundingMode.HALF_UP)
+                                       .doubleValue();
+            }
+
+            result.add(new CategorySummaryDTO(categoryName, amount, percentage));
+        }
+
+        return result;        
+    }
+
 }

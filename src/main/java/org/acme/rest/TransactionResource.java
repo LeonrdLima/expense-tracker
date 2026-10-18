@@ -3,6 +3,7 @@ package org.acme.rest;
 import java.util.List;
 
 import org.acme.model.Transaction;
+import org.acme.rest.dto.CategorySummaryDTO;
 import org.acme.rest.dto.ImportFileDTO;
 import org.acme.rest.dto.SummaryResponseDTO;
 import org.acme.rest.dto.TransactionRequestDTO;
@@ -79,4 +80,12 @@ public class TransactionResource {
         return Response.ok(updated).build();
     }
 
+    @GET
+    @Path("/by-category")
+    public List<CategorySummaryDTO> getExpensesByCategory(
+        @QueryParam("year") Integer year,
+        @QueryParam("month") Integer month
+    ) {
+        return transactionService.getExpensesByCategory(year, month);
+    }
 }
