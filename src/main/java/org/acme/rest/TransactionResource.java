@@ -61,8 +61,10 @@ public class TransactionResource {
     @POST
     @Path("/import")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
-    public Response importCsv(ImportFileDTO form) {
-        List<Transaction> transactions = csvImportService.importCsv(form.file);
+    public Response importCsv(ImportFileDTO form, @QueryParam("creditCard") boolean creditCard) {
+        List<Transaction> transactions = creditCard
+                                       ? csvImportService.importCreditCardCsv(form.file)
+                                       : csvImportService.importCsv(form.file);
         return Response.status(Response.Status.CREATED).entity(transactions).build();
     }
 
