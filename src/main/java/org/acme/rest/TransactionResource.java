@@ -8,6 +8,7 @@ import org.acme.rest.dto.ImportFileDTO;
 import org.acme.rest.dto.SummaryResponseDTO;
 import org.acme.rest.dto.TransactionRequestDTO;
 import org.acme.service.CsvImportService;
+import org.acme.service.OfxImportService;
 import org.acme.service.PdfImportService;
 import org.acme.service.TransactionService;
 
@@ -38,6 +39,9 @@ public class TransactionResource {
 
     @Inject
     PdfImportService pdfImportService;
+
+    @Inject
+    OfxImportService ofxImportService;
     
     @GET
     public List<Transaction> list(
@@ -78,6 +82,15 @@ public class TransactionResource {
     public Response importPdf(ImportFileDTO form) {
         List<Transaction> transactions = pdfImportService.importPdf(form.file);
         return Response.status(Response.Status.CREATED).entity(transactions).build();
+    }
+
+    @POST
+    @Path("/import/ofx")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response importOfx(ImportFileDTO form) {
+        List<Transaction> transactions = ofxImportService.importOfx(form.file);
+        return Response.status(Response.Status.CREATED).entity(transactions).build();
+
     }
 
     @DELETE

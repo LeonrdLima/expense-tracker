@@ -68,16 +68,17 @@ public class PdfImportService {
 
                 String lower = line.toLowerCase();
 
-                // Gatilho de Início: Liga o parser quando chega na tabela de compras
+                // Gatilho de Início: Liga o parser quando chega na tabela de compras/lançamentos
                 if(!inTransactionsSection) {
                     if(lower.contains("transações de") || lower.contains("transacoes de")) {
                         inTransactionsSection = true;
                         isNubankCreditCard = true;
                         continue;
-                    } else if((lower.contains("data") && lower.contains("descri")) ||
+                    } else if((lower.contains("data") && (lower.contains("descri") || lower.contains("lançamento") || lower.contains("lancamento") || lower.contains("histórico") || lower.contains("historico"))) ||
                               lower.contains("credito/debito") ||
                               lower.contains("resgate rdb") || lower.contains("compra no débito") || lower.contains("compra no debito")) {
                         inTransactionsSection = true;
+                        continue;
                     } else {
                         // Ainda na capa/dados cadastrais (nome, endereço, juros): pula
                         continue;
@@ -119,15 +120,20 @@ public class PdfImportService {
                               ? line.substring(dateEndIndex, amountStartIndex).trim()
                               : line.substring(0, amountStartIndex).trim();
                 
-                // 4. Detecta parcelas
+                // 4. Detecta parcelas (ignorando se for PIX/TED ou se parcela atual > total)
                 Integer currentInst = null;
                 Integer totalInst = null;
+                boolean isTransferOrPix = middle.toUpperCase().contains("PIX") || middle.toUpperCase().contains("TED") || middle.toUpperCase().contains("APLICACAO");
                 Matcher instMatcher = INSTALLMENT_PATTERN.matcher(middle);
-                if(instMatcher.find()) {
+                if(!isTransferOrPix && instMatcher.find()) {
                     try {
-                        currentInst = Integer.parseInt(instMatcher.group(1));
-                        totalInst = Integer.parseInt(instMatcher.group(2));
-                        middle = instMatcher.replaceFirst("").trim();
+                        int c = Integer.parseInt(instMatcher.group(1));
+                        int t = Integer.parseInt(instMatcher.group(2));
+                        if(c >= 1 && t > 1 && c <= t) {
+                            currentInst = c;
+                            totalInst = t;
+                            middle = instMatcher.replaceFirst("").trim();
+                        }
                     } catch (Exception ignored) {}
                 }
 
