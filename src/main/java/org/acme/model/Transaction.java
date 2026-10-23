@@ -26,4 +26,6 @@ public class Transaction extends PanacheEntity {
     public BigDecimal amount;
     public LocalDate date;
     public String beneficiary;
+    public Integer currentInstallment;
+    public Integer totalInstallments;
 }

@@ -8,6 +8,7 @@ import org.acme.rest.dto.ImportFileDTO;
 import org.acme.rest.dto.SummaryResponseDTO;
 import org.acme.rest.dto.TransactionRequestDTO;
 import org.acme.service.CsvImportService;
+import org.acme.service.PdfImportService;
 import org.acme.service.TransactionService;
 
 import jakarta.inject.Inject;
@@ -34,6 +35,9 @@ public class TransactionResource {
 
     @Inject 
     CsvImportService csvImportService;
+
+    @Inject
+    PdfImportService pdfImportService;
     
     @GET
     public List<Transaction> list(
@@ -59,12 +63,20 @@ public class TransactionResource {
     }
 
     @POST
-    @Path("/import")
+    @Path("/import/csv")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     public Response importCsv(ImportFileDTO form, @QueryParam("creditCard") boolean creditCard) {
         List<Transaction> transactions = creditCard
                                        ? csvImportService.importCreditCardCsv(form.file)
                                        : csvImportService.importCsv(form.file);
+        return Response.status(Response.Status.CREATED).entity(transactions).build();
+    }
+
+    @POST
+    @Path("/import/pdf")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response importPdf(ImportFileDTO form) {
+        List<Transaction> transactions = pdfImportService.importPdf(form.file);
         return Response.status(Response.Status.CREATED).entity(transactions).build();
     }
 

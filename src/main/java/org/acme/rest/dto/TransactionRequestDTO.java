@@ -27,5 +27,6 @@ public class TransactionRequestDTO {
     public LocalDate date;
 
     public String beneficiary;
-
+    public Integer currentInstallment;
+    public Integer totalInstallments;
 }
