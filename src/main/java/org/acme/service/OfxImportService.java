@@ -33,7 +33,7 @@ public class OfxImportService {
     @Transactional
     public List<Transaction> importOfx(FileUpload file) {
         List<Transaction> transactions = new ArrayList<>();
-        Category defaultCategory = Category.find("name", "Outros").firstResult();
+        Category defaultCategory = categorizationService.findOrCreate("Outros");
 
         try {
             String content = Files.readString(file.filePath(), StandardCharsets.UTF_8);
@@ -84,7 +84,6 @@ public class OfxImportService {
             throw new OfxImportException("Erro ao importar arquivo OFX: " + e.getMessage());
         }
 
-        Transaction.persist(transactions);
         return transactions;
     }
 

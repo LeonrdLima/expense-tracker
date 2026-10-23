@@ -53,7 +53,7 @@ public class PdfImportService {
     @Transactional
     public List<Transaction> importPdf(FileUpload file) {
         List<Transaction> transactions = new ArrayList<>();
-        Category defaultCategory = Category.find("name", "Outros").firstResult();
+        Category defaultCategory = categorizationService.findOrCreate("Outros");
         int fallbackYear = LocalDate.now().getYear();
 
         try {
@@ -182,7 +182,6 @@ public class PdfImportService {
             throw new PdfImportException("Erro ao processar o arquivo PDF: " + e.getMessage());
         }
 
-        Transaction.persist(transactions);
         return transactions;
     }
 

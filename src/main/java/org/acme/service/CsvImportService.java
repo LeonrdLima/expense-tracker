@@ -69,7 +69,7 @@ public class CsvImportService {
                 throw new CsvImportException("Não foi possível identificar as colunas obrigatórias (Data, Descrição, Valor) no CSV");
             }
 
-            Category defaultCategory = Category.find("name", "Outros").firstResult();
+            Category defaultCategory = categorizationService.findOrCreate("Outros");
 
             for(int i = headerIndex + 1; i < lines.size(); i++) {
                 String[] row = splitLine(lines.get(i), delimiter);
@@ -120,7 +120,6 @@ public class CsvImportService {
             throw new CsvImportException("Erro ao ler o arquivo CSV: " + e.getMessage());
         }
 
-        Transaction.persist(transactions);
         return transactions;
     }
 

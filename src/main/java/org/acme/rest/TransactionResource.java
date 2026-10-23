@@ -7,6 +7,7 @@ import org.acme.rest.dto.CategorySummaryDTO;
 import org.acme.rest.dto.ImportFileDTO;
 import org.acme.rest.dto.SummaryResponseDTO;
 import org.acme.rest.dto.TransactionRequestDTO;
+import org.acme.service.CategorizationService;
 import org.acme.service.CsvImportService;
 import org.acme.service.OfxImportService;
 import org.acme.service.PdfImportService;
@@ -42,6 +43,9 @@ public class TransactionResource {
 
     @Inject
     OfxImportService ofxImportService;
+
+    @Inject
+    CategorizationService categorizationService;
     
     @GET
     public List<Transaction> list(
@@ -73,7 +77,8 @@ public class TransactionResource {
         List<Transaction> transactions = creditCard
                                        ? csvImportService.importCreditCardCsv(form.file)
                                        : csvImportService.importCsv(form.file);
-        return Response.status(Response.Status.CREATED).entity(transactions).build();
+        List<Transaction> saved = transactionService.persistUnique(transactions);
+        return Response.status(Response.Status.CREATED).entity(saved).build();
     }
 
     @POST
@@ -81,7 +86,8 @@ public class TransactionResource {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     public Response importPdf(ImportFileDTO form) {
         List<Transaction> transactions = pdfImportService.importPdf(form.file);
-        return Response.status(Response.Status.CREATED).entity(transactions).build();
+        List<Transaction> saved = transactionService.persistUnique(transactions);
+        return Response.status(Response.Status.CREATED).entity(saved).build();
     }
 
     @POST
@@ -89,7 +95,8 @@ public class TransactionResource {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     public Response importOfx(ImportFileDTO form) {
         List<Transaction> transactions = ofxImportService.importOfx(form.file);
-        return Response.status(Response.Status.CREATED).entity(transactions).build();
+        List<Transaction> saved = transactionService.persistUnique(transactions);
+        return Response.status(Response.Status.CREATED).entity(saved).build();
 
     }
 
@@ -104,6 +111,7 @@ public class TransactionResource {
     @Path("/{id}")
     public Response update(@PathParam("id") Long id, @Valid TransactionRequestDTO dto) {
         Transaction updated = transactionService.update(id, dto);
+        categorizationService.learn(updated.description, updated.category);
         return Response.ok(updated).build();
     }
 

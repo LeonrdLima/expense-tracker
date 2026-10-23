@@ -146,4 +146,24 @@ public class TransactionService {
         return result;        
     }
 
+    @Transactional
+    public List<Transaction> persistUnique(List<Transaction> transactions) {
+        List<Transaction> saved = new ArrayList<>();
+        Map<String, Long> existingCountsCache = new HashMap<>();
+        Map<String, Long> seenInBatchCounts = new HashMap<>();
+
+        for(Transaction t : transactions) {
+            String key = t.date + "|" + t.description + "|" + t.amount.stripTrailingZeros().toPlainString();
+            long existingInDb = existingCountsCache.computeIfAbsent(key, k -> Transaction.count("date = ?1 and description = ?2 and amount = ?3", t.date, t.description, t.amount));
+            long seenNow = seenInBatchCounts.getOrDefault(key, 0L) + 1;
+            seenInBatchCounts.put(key, seenNow);
+
+            if(seenNow > existingInDb) {
+                t.persist();
+                saved.add(t);
+            }
+        }
+        return saved;
+    }
+
 }

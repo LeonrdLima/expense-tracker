@@ -5,8 +5,8 @@
 -- insert into myentity (id, field) values(3, 'field-3');
 -- alter sequence myentity_seq restart with 4;
 
-INSERT INTO categories (id, name) VALUES (nextval('categories_SEQ'), 'Alimentação');
-INSERT INTO categories (id, name) VALUES (nextval('categories_SEQ'), 'Lazer');
-INSERT INTO categories (id, name) VALUES (nextval('categories_SEQ'), 'Outros');
+INSERT INTO categories (id, name) VALUES (nextval('categories_seq'), 'Alimentação') ON CONFLICT (name) DO NOTHING;
+INSERT INTO categories (id, name) VALUES (nextval('categories_seq'), 'Lazer') ON CONFLICT (name) DO NOTHING;
+INSERT INTO categories (id, name) VALUES (nextval('categories_seq'), 'Outros') ON CONFLICT (name) DO NOTHING;
 
-ALTER SEQUENCE categories_SEQ RESTART WITH 4;
+ALTER SEQUENCE categories_seq RESTART WITH 4;
