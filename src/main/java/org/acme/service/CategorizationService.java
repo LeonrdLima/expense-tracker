@@ -35,7 +35,7 @@ public class CategorizationService {
 
     public String cleanForMatching(String description) {
         if(description == null) return "";
-        return description.replaceAll("(?i)\\s*-\\s*parcela\\s+\\d+/\\d+$", "")
+        return description.trim().replaceAll("(?i)\\s*-\\s*parcela\\s+\\d+/\\d+$", "")
                           .toLowerCase()
                           .trim();
     }
@@ -65,6 +65,7 @@ public class CategorizationService {
         }
     }
 
+    @Transactional
     public Category findOrCreate(String name) {
         Category category = Category.find("lower(name)", name.toLowerCase()).firstResult();
         if(category == null) {

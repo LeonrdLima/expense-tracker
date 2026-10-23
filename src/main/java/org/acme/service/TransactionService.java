@@ -37,6 +37,8 @@ public class TransactionService {
         transaction.date = dto.date;
         transaction.category = category;
         transaction.beneficiary = dto.beneficiary;
+        transaction.currentInstallment = dto.currentInstallment;
+        transaction.totalInstallments = dto.totalInstallments;
         transaction.persist();
 
         return transaction;
@@ -104,6 +106,12 @@ public class TransactionService {
         transaction.date = dto.date;
         transaction.category = category;
         transaction.beneficiary = dto.beneficiary;
+        if(dto.currentInstallment != null) {
+            transaction.currentInstallment = dto.currentInstallment;
+        }
+        if(dto.totalInstallments != null) {
+            transaction.totalInstallments = dto.totalInstallments;
+        }
 
         return transaction;
     }

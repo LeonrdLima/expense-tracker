@@ -169,9 +169,9 @@ public class CsvImportService {
     }
 
     private LocalDate parseDate(String raw) {
-        String cleaned = raw.replace("[^0-9/\\-]", "");
+        String cleaned = raw.replaceAll("[^0-9/\\-]", "");
         List<DateTimeFormatter> formatters = List.of(
-            DateTimeFormatter.ofPattern("dd/MM/yyy"),
+            DateTimeFormatter.ofPattern("dd/MM/yyyy"),
             DateTimeFormatter.ofPattern("yyyy-MM-dd"),
             DateTimeFormatter.ofPattern("dd-MM-yyyy"),
             DateTimeFormatter.ofPattern("d/M/yyyy")
