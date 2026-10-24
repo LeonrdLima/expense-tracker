@@ -28,22 +28,40 @@ public class CsvImportService {
     @Inject 
     CategorizationService categorizationService;
 
+    @Inject
+    InstitutionDetector institutionDetector;
+
     private static final List<String> DATE_KEYWORDS = List.of("data", "dt", "date", "dia");
     private static final List<String> DESCRIPTION_KEYWORDS = List.of("descricao", "historico", "detalhe", "lancamento", "memo", "transacao", "title", "estabelecimento");
     private static final List<String> AMOUNT_KEYWORDS = List.of("valor", "quantia", "amount");
     private static final List<String> CATEGORY_KEYWORDS = List.of("categoria", "category", "tag");
+    private static final List<String> IGNORE_DESCRIPTIONS = List.of("pagamento recebido");
     
     @Transactional 
     public List<Transaction> importCsv(FileUpload file) {
-        return importCsv(file, false);
+        return importCsv(file, false, null);
+    }
+
+    @Transactional
+    public List<Transaction> importCsv(FileUpload file, String institution) {
+        return importCsv(file, false, institution);
     }
 
     @Transactional
     public List<Transaction> importCreditCardCsv(FileUpload file) {
-        return importCsv(file, true);
+        return importCsv(file, true, null);
+    }
+
+    @Transactional
+    public List<Transaction> importCreditCardCsv(FileUpload file, String institution) {
+        return importCsv(file, true, institution);
     }
 
     public List<Transaction> importCsv(FileUpload file, boolean isCreditCard) {
+        return importCsv(file, isCreditCard, null);
+    }
+
+    public List<Transaction> importCsv(FileUpload file, boolean isCreditCard, String explicitInstitution) {
         List<Transaction> transactions = new ArrayList<>();
 
         try(BufferedReader reader = Files.newBufferedReader(file.filePath(), StandardCharsets.UTF_8)) {
@@ -55,10 +73,13 @@ public class CsvImportService {
                 return Collections.emptyList();
             }
 
+            String detectedInstitution = institutionDetector.detectFromCsv(lines, file.fileName(), explicitInstitution);
+
             char delimiter = detectDelimiter(lines.get(0));
 
             int headerIndex = findHeaderLineIndex(lines, delimiter);
             String[] headers = splitLine(lines.get(headerIndex), delimiter);
+            boolean effectiveCreditCard = resolveIsCreditCard(lines, headerIndex, isCreditCard);
 
             int dateIdx = findColumnIndex(headers, DATE_KEYWORDS);
             int descIdx = findColumnIndex(headers, DESCRIPTION_KEYWORDS);
@@ -84,7 +105,12 @@ public class CsvImportService {
                         continue;
                     }
 
-                    if(isCreditCard && rawAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    String normDesc = normalize(description);
+                    if(IGNORE_DESCRIPTIONS.stream().anyMatch(normDesc::contains)) {
+                        continue;
+                    }
+
+                    if(effectiveCreditCard) {
                         rawAmount = rawAmount.negate();
                     }
 
@@ -110,6 +136,8 @@ public class CsvImportService {
                     t.category = category;
                     t.transactionType = type;
                     t.amount = rawAmount.abs();
+                    t.isCreditCard = effectiveCreditCard;
+                    t.institution = detectedInstitution;
 
                     transactions.add(t);
                 } catch(Exception ignored) {
@@ -121,6 +149,32 @@ public class CsvImportService {
         }
 
         return transactions;
+    }
+
+    private boolean resolveIsCreditCard(List<String> lines, int headerIndex, boolean userFlag) {
+        String headerNorm = normalize(lines.get(headerIndex));
+
+        // Colunas exclusivas de extrato de conta corrente (ex: Nubank "Data,Valor,Identificador,Descrição" ou bancos com "Saldo")
+        if(headerNorm.contains("identificador") || headerNorm.contains("saldo")) {
+            return false;
+        }
+
+        // Cabeçalho clássico de fatura de cartão do Nubank ("date,title,amount" ou "date,category,title,amount")
+        if(headerNorm.equals("date,title,amount") || headerNorm.equals("date,category,title,amount")) {
+            return true;
+        }
+
+        // Verifica amostra das linhas procurando termos exclusivos de conta corrente (Pix / Débito)
+        for(int i = headerIndex + 1; i < Math.min(lines.size(), headerIndex + 15); i++) {
+            String lineNorm = normalize(lines.get(i));
+            if(lineNorm.contains("transferencia enviada pelo pix") ||
+               lineNorm.contains("transferencia recebida pelo pix") ||
+               lineNorm.contains("compra no debito")) {
+                return false;
+            }
+        }
+
+        return userFlag;
     }
 
     private char detectDelimiter(String line) {

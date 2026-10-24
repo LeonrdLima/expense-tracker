@@ -200,13 +200,166 @@ public class TransactionResourceTest {
             .body("find { it.categoryName == 'Lazer' }.percentage", equalTo(25.0f));
     }
 
+    @Test
+    @DisplayName("Deve atualizar parcialmente via PATCH alterando somente a categoria")
+    void shouldPatchOnlyCategory() {
+        TransactionRequestDTO dto = new TransactionRequestDTO();
+        dto.description = "Uber Viagem";
+        dto.transactionType = TransactionType.EXPENSE;
+        dto.categoryId = outrosId;
+        dto.amount = new BigDecimal("25.50");
+        dto.date = LocalDate.of(2026, 10, 20);
+        dto.beneficiary = "Uber BV";
+
+        Integer id = given().contentType(ContentType.JSON).body(dto)
+            .when().post("/transactions")
+            .then().statusCode(201).extract().path("id");
+
+        // Envia apenas categoryId no PATCH
+        given()
+            .contentType(ContentType.JSON)
+            .body("{\"categoryId\": " + lazerId + "}")
+        .when()
+            .patch("/transactions/" + id)
+        .then()
+            .statusCode(200)
+            .body("category.name", equalTo("Lazer"))
+            .body("description", equalTo("Uber Viagem"))
+            .body("amount", equalTo(25.50f))
+            .body("beneficiary", equalTo("Uber BV"))
+            .body("transactionType", equalTo("EXPENSE"));
+    }
+
+    @Test
+    @DisplayName("Deve atualizar parcialmente via PATCH alterando somente o beneficiario")
+    void shouldPatchOnlyBeneficiary() {
+        TransactionRequestDTO dto = new TransactionRequestDTO();
+        dto.description = "Café Padaria";
+        dto.transactionType = TransactionType.EXPENSE;
+        dto.categoryId = alimentacaoId;
+        dto.amount = new BigDecimal("12.00");
+        dto.date = LocalDate.of(2026, 10, 21);
+
+        Integer id = given().contentType(ContentType.JSON).body(dto)
+            .when().post("/transactions")
+            .then().statusCode(201).extract().path("id");
+
+        // Envia apenas beneficiary no PATCH
+        given()
+            .contentType(ContentType.JSON)
+            .body("{\"beneficiary\": \"Padaria do Bairro\"}")
+        .when()
+            .patch("/transactions/" + id)
+        .then()
+            .statusCode(200)
+            .body("beneficiary", equalTo("Padaria do Bairro"))
+            .body("category.name", equalTo("Alimentação"))
+            .body("amount", equalTo(12.00f));
+    }
+
+    @Test
+    @DisplayName("Deve filtrar por intervalo customizado (ciclo de fatura startDate/endDate) e filtros combinados")
+    void shouldFilterByCustomDateRangeAndCriteria() {
+        // Fora do ciclo (19/09)
+        createSampleTransaction("Compra Antiga", TransactionType.EXPENSE, alimentacaoId, "90.00", LocalDate.of(2026, 9, 19));
+        // Dentro do ciclo (20/09 a 19/10)
+        createSampleTransaction("iFood Pizzaria", TransactionType.EXPENSE, alimentacaoId, "80.00", LocalDate.of(2026, 9, 20));
+        createSampleTransaction("iFood Mercado", TransactionType.EXPENSE, alimentacaoId, "120.00", LocalDate.of(2026, 10, 5));
+        createSampleTransaction("Show Musical", TransactionType.EXPENSE, lazerId, "200.00", LocalDate.of(2026, 10, 19));
+        // Fora do ciclo (20/10 - próxima fatura)
+        createSampleTransaction("Próxima Fatura", TransactionType.EXPENSE, lazerId, "300.00", LocalDate.of(2026, 10, 20));
+
+        // 1. Resumo exato do ciclo da fatura (20/09/2026 a 19/10/2026): 80 + 120 + 200 = 400
+        given()
+            .queryParam("startDate", "2026-09-20")
+            .queryParam("endDate", "2026-10-19")
+        .when()
+            .get("/transactions/summary")
+        .then()
+            .statusCode(200)
+            .body("totalExpense", equalTo(400.00f))
+            .body("balance", equalTo(-400.00f));
+
+        // 2. Filtro combinado: dentro do ciclo + categoria Alimentação + descrição contendo "ifood"
+        given()
+            .queryParam("startDate", "2026-09-20")
+            .queryParam("endDate", "2026-10-19")
+            .queryParam("categoryId", alimentacaoId)
+            .queryParam("type", "EXPENSE")
+            .queryParam("description", "ifood")
+        .when()
+            .get("/transactions")
+        .then()
+            .statusCode(200)
+            .body("size()", is(2));
+
+        // 3. Valida erro 400 quando startDate > endDate
+        given()
+            .queryParam("startDate", "2026-10-25")
+            .queryParam("endDate", "2026-10-01")
+        .when()
+            .get("/transactions")
+        .then()
+            .statusCode(400)
+            .body("message", containsString("data inicial não pode ser posterior"));
+    }
+
+    @Test
+    @DisplayName("Deve abater estorno da categoria correspondente no cálculo de gastos por categoria")
+    void shouldDeductRefundFromCategoryExpenses() {
+        // Compra de R$ 100.00 em Lazer
+        createSampleTransaction("Ingresso Show", TransactionType.EXPENSE, lazerId, "100.00", LocalDate.of(2026, 10, 10));
+        // Estorno de R$ 40.00 em Lazer
+        createSampleTransaction("Estorno Ingresso Show", TransactionType.INCOME, lazerId, "40.00", LocalDate.of(2026, 10, 12));
+
+        // Deve exibir gasto líquido de R$ 60.00 em Lazer
+        given()
+            .queryParam("year", 2026)
+            .queryParam("month", 10)
+        .when()
+            .get("/transactions/by-category")
+        .then()
+            .statusCode(200)
+            .body("size()", is(1))
+            .body("[0].categoryName", equalTo("Lazer"))
+            .body("[0].totalAmount", equalTo(60.00f))
+            .body("[0].percentage", equalTo(100.0f));
+    }
+
+    @Test
+    @DisplayName("Deve abater qualquer INCOME de cartao de credito mesmo sem a palavra estorno na descricao")
+    void shouldDeductCreditCardIncomeEvenWithoutRefundWordInDescription() {
+        // Compra no cartão de R$ 80.00
+        createSampleTransaction("Uber - NuPay", TransactionType.EXPENSE, alimentacaoId, "80.00", LocalDate.of(2026, 10, 5), true);
+        // Devolução no cartão de R$ 30.00 com descrição genérica (sem a palavra 'estorno')
+        createSampleTransaction("Uber - NuPay", TransactionType.INCOME, alimentacaoId, "30.00", LocalDate.of(2026, 10, 6), true);
+
+        // Deve abater e exibir gasto líquido de R$ 50.00 em Alimentação
+        given()
+            .queryParam("year", 2026)
+            .queryParam("month", 10)
+        .when()
+            .get("/transactions/by-category")
+        .then()
+            .statusCode(200)
+            .body("size()", is(1))
+            .body("[0].categoryName", equalTo("Alimentação"))
+            .body("[0].totalAmount", equalTo(50.00f))
+            .body("[0].percentage", equalTo(100.0f));
+    }
+
     private void createSampleTransaction(String desc, TransactionType type, Long catId, String amount, LocalDate date) {
+        createSampleTransaction(desc, type, catId, amount, date, false);
+    }
+
+    private void createSampleTransaction(String desc, TransactionType type, Long catId, String amount, LocalDate date, boolean isCreditCard) {
         TransactionRequestDTO dto = new TransactionRequestDTO();
         dto.description = desc;
         dto.transactionType = type;
         dto.categoryId = catId;
         dto.amount = new BigDecimal(amount);
         dto.date = date;
+        dto.isCreditCard = isCreditCard;
 
         given().contentType(ContentType.JSON).body(dto)
             .when().post("/transactions")

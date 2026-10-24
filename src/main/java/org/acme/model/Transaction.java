@@ -28,4 +28,6 @@ public class Transaction extends PanacheEntity {
     public String beneficiary;
     public Integer currentInstallment;
     public Integer totalInstallments;
+    public Boolean isCreditCard = false;
+    public String institution;
 }

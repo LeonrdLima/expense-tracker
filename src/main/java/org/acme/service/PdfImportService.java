@@ -29,6 +29,9 @@ public class PdfImportService {
     @Inject
     CategorizationService categorizationService;
 
+    @Inject
+    InstitutionDetector institutionDetector;
+
     // Detecta datas no formato "dd MMM yyyy" ou "dd/MM/yyyy" (com ou sem ano)
     private static final Pattern DATE_PATTERN = Pattern.compile("\\b(\\d{1,2}\\s+(?:JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)(?:\\s+\\d{4})?|\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?)\\b", Pattern.CASE_INSENSITIVE);
 
@@ -47,17 +50,23 @@ public class PdfImportService {
         "total final", "total compras", "pontos fatura", "bonificação", "bonificacao",
         "fator conversão", "fator conversao", "valor total desta fatura",
         "conversão:", "conversao:", "obrigado pelo pagamento", "guia de consumo",
-        "= usd", "pagamentos"
+        "= usd", "pagamentos", "pagamento recebido", "pagamento em "
     );
 
     @Transactional
     public List<Transaction> importPdf(FileUpload file) {
+        return importPdf(file, null);
+    }
+
+    @Transactional
+    public List<Transaction> importPdf(FileUpload file, String explicitInstitution) {
         List<Transaction> transactions = new ArrayList<>();
         Category defaultCategory = categorizationService.findOrCreate("Outros");
         int fallbackYear = LocalDate.now().getYear();
 
         try {
             List<String> lines = extractLinesFromPdf(file.filePath().toFile());
+            String detectedInstitution = institutionDetector.detectFromPdf(lines, file.fileName(), explicitInstitution);
             LocalDate currentDate = null;
             boolean inTransactionsSection = false;
             boolean isNubankCreditCard = false;
@@ -171,6 +180,8 @@ public class PdfImportService {
                         transaction.category = catResult.category();
                         transaction.currentInstallment = currentInst;
                         transaction.totalInstallments = totalInst;
+                        transaction.isCreditCard = isNubankCreditCard;
+                        transaction.institution = (detectedInstitution != null) ? detectedInstitution : (isNubankCreditCard ? "Nubank" : null);
 
                         transactions.add(transaction);
                     }

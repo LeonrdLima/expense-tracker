@@ -29,4 +29,6 @@ public class TransactionRequestDTO {
     public String beneficiary;
     public Integer currentInstallment;
     public Integer totalInstallments;
+    public Boolean isCreditCard;
+    public String institution;
 }

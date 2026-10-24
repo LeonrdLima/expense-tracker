@@ -62,10 +62,11 @@ public class ImportResourceTest {
     }
 
     @Test
-    @DisplayName("Deve importar CSV de cartão de crédito convertendo valores positivos em EXPENSE")
+    @DisplayName("Deve importar CSV de cartão de crédito convertendo valores positivos em EXPENSE, detectando Nubank e ignorando Pagamento recebido")
     void shouldImportCreditCardCsvAsExpense() {
         String creditCardCsv = """
             date,title,amount
+            2026-10-15,Pagamento recebido,-1200.00
             2026-10-18,Netflix.Com,55.90
             """;
 
@@ -79,14 +80,20 @@ public class ImportResourceTest {
             .body("size()", is(1))
             .body("[0].description", equalTo("Netflix.Com"))
             .body("[0].transactionType", equalTo("EXPENSE"))
-            .body("[0].amount", equalTo(55.90f));
+            .body("[0].amount", equalTo(55.90f))
+            .body("[0].isCreditCard", equalTo(true))
+            .body("[0].institution", equalTo("Nubank"));
     }
 
     @Test
-    @DisplayName("Deve importar arquivo OFX extraindo data, valor e parcelas")
+    @DisplayName("Deve importar arquivo OFX extraindo data, valor, parcelas e detectando instituição pelo BANKID")
     void shouldImportOfxWithInstallments() {
         String ofxContent = """
             <OFX>
+              <FI>
+                <ORG>Banco Inter S.A.
+                <FID>0077
+              </FI>
               <BANKTRANLIST>
                 <STMTTRN>
                   <TRNTYPE>DEBIT
@@ -109,7 +116,8 @@ public class ImportResourceTest {
             .body("[0].transactionType", equalTo("EXPENSE"))
             .body("[0].amount", equalTo(199.90f))
             .body("[0].currentInstallment", equalTo(2))
-            .body("[0].totalInstallments", equalTo(5));
+            .body("[0].totalInstallments", equalTo(5))
+            .body("[0].institution", equalTo("Inter"));
     }
 
     @Test
@@ -118,5 +126,28 @@ public class ImportResourceTest {
         assertEquals(new BigDecimal("-1250.50"), pdfImportService.parseAmount("R$ 1.250,50 D"));
         assertEquals(new BigDecimal("-45.90"), pdfImportService.parseAmount("-45,90"));
         assertEquals(new BigDecimal("300.00"), pdfImportService.parseAmount("300,00 C"));
+    }
+
+    @Test
+    @DisplayName("Nao deve inverter sinais de extrato bancario mesmo se creditCard=true for enviado por engano")
+    void shouldNotInvertBankStatementEvenIfCreditCardTrue() {
+        String nubankAccountCsv = """
+            Data,Valor,Identificador,Descrição
+            15/10/2026,-85.00,abc-123,Transferência enviada pelo Pix - Fulano
+            16/10/2026,200.00,def-456,Transferência recebida pelo Pix - Ciclano
+            """;
+
+        given()
+            .queryParam("creditCard", true)
+            .multiPart("file", "NU_extrato.csv", nubankAccountCsv.getBytes(StandardCharsets.UTF_8), "text/csv")
+        .when()
+            .post("/transactions/import/csv")
+        .then()
+            .statusCode(201)
+            .body("size()", is(2))
+            .body("find { it.description.contains('enviada pelo Pix') }.transactionType", equalTo("EXPENSE"))
+            .body("find { it.description.contains('enviada pelo Pix') }.isCreditCard", equalTo(false))
+            .body("find { it.description.contains('recebida pelo Pix') }.transactionType", equalTo("INCOME"))
+            .body("find { it.description.contains('recebida pelo Pix') }.isCreditCard", equalTo(false));
     }
 }

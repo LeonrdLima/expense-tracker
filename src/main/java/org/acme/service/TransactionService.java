@@ -9,12 +9,15 @@ import java.util.List;
 import java.util.Map;
 
 import org.acme.exception.CategoryNotFoundException;
+import org.acme.exception.InvalidFilterException;
 import org.acme.exception.TransactionNotFoundException;
 import org.acme.model.Category;
 import org.acme.model.Transaction;
 import org.acme.model.TransactionType;
 import org.acme.rest.dto.CategorySummaryDTO;
 import org.acme.rest.dto.SummaryResponseDTO;
+import org.acme.rest.dto.TransactionFilterDTO;
+import org.acme.rest.dto.TransactionPatchDTO;
 import org.acme.rest.dto.TransactionRequestDTO;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -39,6 +42,8 @@ public class TransactionService {
         transaction.beneficiary = dto.beneficiary;
         transaction.currentInstallment = dto.currentInstallment;
         transaction.totalInstallments = dto.totalInstallments;
+        transaction.isCreditCard = Boolean.TRUE.equals(dto.isCreditCard);
+        transaction.institution = dto.institution;
         transaction.persist();
 
         return transaction;
@@ -49,17 +54,93 @@ public class TransactionService {
     }
 
     public List<Transaction> list(Integer year, Integer month) {
-        if(year == null || month == null) {
-            return Transaction.listAll();
+        TransactionFilterDTO filter = new TransactionFilterDTO();
+        filter.year = year;
+        filter.month = month;
+        return list(filter);
+    }
+
+    public List<Transaction> list(TransactionFilterDTO filter) {
+        if(filter == null) {
+            return Transaction.list("order by date desc");
         }
-        
-        LocalDate startDate = LocalDate.of(year, month, 1);
-        LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
-        return Transaction.list("date between ?1 and ?2 order by date desc", startDate, endDate);
+
+        LocalDate effectiveStart = filter.startDate;
+        LocalDate effectiveEnd = filter.endDate;
+
+        // Se startDate/endDate não foram informados, usa year/month como fallback
+        if(effectiveStart == null && effectiveEnd == null && filter.year != null) {
+            if(filter.month != null) {
+                if(filter.month < 1 || filter.month > 12) {
+                    throw new InvalidFilterException("Mês inválido: deve estar entre 1 e 12");
+                }
+                effectiveStart = LocalDate.of(filter.year, filter.month, 1);
+                effectiveEnd = effectiveStart.withDayOfMonth(effectiveStart.lengthOfMonth());
+            } else {
+                effectiveStart = LocalDate.of(filter.year, 1, 1);
+                effectiveEnd = LocalDate.of(filter.year, 12, 31);
+            }
+        }
+
+        if(effectiveStart != null && effectiveEnd != null && effectiveStart.isAfter(effectiveEnd)) {
+            throw new InvalidFilterException("A data inicial não pode ser posterior à data final");
+        }
+
+        List<String> conditions = new ArrayList<>();
+        Map<String, Object> params = new HashMap<>();
+
+        if(effectiveStart != null) {
+            conditions.add("date >= :startDate");
+            params.put("startDate", effectiveStart);
+        }
+
+        if(effectiveEnd != null) {
+            conditions.add("date <= :endDate");
+            params.put("endDate", effectiveEnd);
+        }
+
+        if(filter.categoryId != null) {
+            conditions.add("category.id = :categoryId");
+            params.put("categoryId", filter.categoryId);
+        }
+
+        if(filter.type != null) {
+            conditions.add("transactionType = :type");
+            params.put("type", filter.type);
+        }
+
+        if(filter.description != null && !filter.description.isBlank()) {
+            conditions.add("lower(description) like :description");
+            params.put("description", "%" + filter.description.trim().toLowerCase() + "%");
+        }
+
+        if(filter.isCreditCard != null) {
+            conditions.add("isCreditCard = :isCreditCard");
+            params.put("isCreditCard", filter.isCreditCard);
+        }
+
+        if(filter.institution != null && !filter.institution.isBlank()) {
+            conditions.add("lower(institution) = :institution");
+            params.put("institution", filter.institution.trim().toLowerCase());
+        }
+
+        if(conditions.isEmpty()) {
+            return Transaction.list("order by date desc");
+        }
+
+        String query = String.join(" and ", conditions) + " order by date desc";
+        return Transaction.list(query, params);
     }
 
     public SummaryResponseDTO calculateSummary(Integer year, Integer month) {
-        List<Transaction> transactions = list(year, month);
+        TransactionFilterDTO filter = new TransactionFilterDTO();
+        filter.year = year;
+        filter.month = month;
+        return calculateSummary(filter);
+    }
+
+    public SummaryResponseDTO calculateSummary(TransactionFilterDTO filter) {
+        List<Transaction> transactions = list(filter);
 
         BigDecimal totalIncome = BigDecimal.ZERO;
         BigDecimal totalExpense = BigDecimal.ZERO;
@@ -88,6 +169,11 @@ public class TransactionService {
         t.delete();
     }
 
+    @Transactional
+    public void deleteAll() {
+        Transaction.deleteAll();
+    }
+
     @Transactional 
     public Transaction update(Long id, TransactionRequestDTO dto) {
         Transaction transaction = Transaction.findById(id);
@@ -112,30 +198,85 @@ public class TransactionService {
         if(dto.totalInstallments != null) {
             transaction.totalInstallments = dto.totalInstallments;
         }
+        if(dto.isCreditCard != null) {
+            transaction.isCreditCard = dto.isCreditCard;
+        }
+        if(dto.institution != null) {
+            transaction.institution = dto.institution;
+        }
+
+        return transaction;
+    }
+
+    @Transactional
+    public Transaction partialUpdate(Long id, TransactionPatchDTO dto) {
+        Transaction transaction = Transaction.findById(id);
+        if(transaction == null) {
+            throw new TransactionNotFoundException("Transação não encontrada para o ID informado");
+        }
+
+        if(dto.categoryId != null) {
+            Category category = Category.findById(dto.categoryId);
+            if(category == null) {
+                throw new CategoryNotFoundException("Categoria não encontrada para o ID informado");
+            }
+            transaction.category = category;
+        }
+        if(dto.beneficiary != null) {
+            transaction.beneficiary = dto.beneficiary;
+        }
+        if(dto.transactionType != null) {
+            transaction.transactionType = dto.transactionType;
+        }
+        if(dto.institution != null) {
+            transaction.institution = dto.institution;
+        }
 
         return transaction;
     }
 
     public List<CategorySummaryDTO> getExpensesByCategory(Integer year, Integer month) {
-        List<Transaction> transactions = list(year, month);
-        Map<String, BigDecimal> categoryTotals = new HashMap<>();
+        TransactionFilterDTO filter = new TransactionFilterDTO();
+        filter.year = year;
+        filter.month = month;
+        return getExpensesByCategory(filter);
+    }
+
+    public List<CategorySummaryDTO> getExpensesByCategory(TransactionFilterDTO filter) {
+        List<Transaction> transactions = list(filter);
+        Map<String, BigDecimal> categoryExpenses = new HashMap<>();
+        Map<String, BigDecimal> categoryRefunds = new HashMap<>();
 
         for(Transaction t : transactions) {
+            String categoryName = t.category.name;
+
             if(t.transactionType == TransactionType.EXPENSE) {
-                String categoryName = t.category.name;
-                BigDecimal current = categoryTotals.getOrDefault(categoryName, BigDecimal.ZERO);
-                categoryTotals.put(categoryName, current.add(t.amount));
+                BigDecimal current = categoryExpenses.getOrDefault(categoryName, BigDecimal.ZERO);
+                categoryExpenses.put(categoryName, current.add(t.amount));
+            } else if(t.transactionType == TransactionType.INCOME && (Boolean.TRUE.equals(t.isCreditCard) || isRefund(t.description))) {
+                BigDecimal current = categoryRefunds.getOrDefault(categoryName, BigDecimal.ZERO);
+                categoryRefunds.put(categoryName, current.add(t.amount));
             }
         }
-        
+
+        Map<String, BigDecimal> netTotals = new HashMap<>();
         BigDecimal totalExpense = BigDecimal.ZERO;
-        for(BigDecimal amount : categoryTotals.values()) {
-            totalExpense = totalExpense.add(amount);
+
+        for(Map.Entry<String, BigDecimal> entry : categoryExpenses.entrySet()) {
+            String categoryName = entry.getKey();
+            BigDecimal expenses = entry.getValue();
+            BigDecimal refunds = categoryRefunds.getOrDefault(categoryName, BigDecimal.ZERO);
+            BigDecimal net = expenses.subtract(refunds);
+
+            if(net.compareTo(BigDecimal.ZERO) > 0) {
+                netTotals.put(categoryName, net);
+                totalExpense = totalExpense.add(net);
+            }
         }
 
         List<CategorySummaryDTO> result = new ArrayList<>();
         
-        for(Map.Entry<String, BigDecimal> entry : categoryTotals.entrySet()) {
+        for(Map.Entry<String, BigDecimal> entry : netTotals.entrySet()) {
             String categoryName = entry.getKey();
             BigDecimal amount = entry.getValue();
 
@@ -152,6 +293,12 @@ public class TransactionService {
         }
 
         return result;        
+    }
+
+    private boolean isRefund(String description) {
+        if(description == null) return false;
+        String lower = description.toLowerCase();
+        return lower.contains("estorno") || lower.contains("reembolso") || lower.contains("devolucao") || lower.contains("devolução");
     }
 
     @Transactional

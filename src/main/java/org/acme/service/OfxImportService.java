@@ -26,17 +26,27 @@ public class OfxImportService {
     @Inject 
     CategorizationService categorizationService;
 
+    @Inject
+    InstitutionDetector institutionDetector;
+
     // Captura cada bloco <STMTTRN>
     private static final Pattern STMTTRN_BLOCK = Pattern.compile("<STMTTRN>(.*?)</STMTTRN>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
     private static final Pattern INSTALLMENT_PATTERN = Pattern.compile("\\b(?:parcela\\s+)?(\\d{1,2})\\s*(?:/|DE)\\s*(\\d{1,2})(?!/\\d{2,4})\\b", Pattern.CASE_INSENSITIVE);
 
     @Transactional
     public List<Transaction> importOfx(FileUpload file) {
+        return importOfx(file, null);
+    }
+
+    @Transactional
+    public List<Transaction> importOfx(FileUpload file, String explicitInstitution) {
         List<Transaction> transactions = new ArrayList<>();
         Category defaultCategory = categorizationService.findOrCreate("Outros");
 
         try {
             String content = Files.readString(file.filePath(), StandardCharsets.UTF_8);
+            String detectedInstitution = institutionDetector.detectFromOfx(content, file.fileName(), explicitInstitution);
+            boolean isCreditCard = content.toUpperCase().contains("<CCSTMTTRNRS>") || content.toUpperCase().contains("CREDITCARD");
             Matcher blockMatcher = STMTTRN_BLOCK.matcher(content);
 
             while(blockMatcher.find()) {
@@ -52,6 +62,9 @@ public class OfxImportService {
                     continue;
                 }
                 description = description.replace("\"", "");
+                if(description.toLowerCase().contains("pagamento recebido")) {
+                    continue;
+                }
 
                 LocalDate date = LocalDate.parse(rawDate.trim().substring(0, 8), DateTimeFormatter.ofPattern("yyyyMMdd"));
 
@@ -78,6 +91,8 @@ public class OfxImportService {
                 transaction.category = categorizationResult.category();
                 transaction.currentInstallment = currentInstallment;
                 transaction.totalInstallments = totalInstallments;
+                transaction.isCreditCard = isCreditCard;
+                transaction.institution = detectedInstitution;
                 transactions.add(transaction);
             }
         } catch (Exception e) {
