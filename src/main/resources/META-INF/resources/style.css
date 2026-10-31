@@ -233,6 +233,12 @@ body {
     align-items: end;
 }
 
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
 .form-group label {
     font-size: 0.8rem;
     font-weight: 600;
@@ -387,4 +393,17 @@ body {
 .projection-item-amount {
     font-weight: 600;
     white-space: nowrap;
+}
+
+/* Esconde qualquer se~çao ou formulário que tiver a classe 'hidden' */
+.hidden {
+    display: none !important;
+}
+
+/* Barra de botões rápidos para abrir e fechar ferramentas */
+.toolbar {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
 }

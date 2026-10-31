@@ -18,6 +18,12 @@ function formatDate(isoDate) {
     return `${day}/${month}/${year}`;
 }
 
+// Alterna entre mostrar e esconder um painel pelo ID
+function togglePanel(panelId) {
+    const panel = document.getElementById(panelId);
+    panel.classList.toggle('hidden');
+}
+
 // Lê os campos de filtro da tela e monta a query string (ex: ?type=EXPENSE&institution=Nubank")
 function buildFilterQuery() {
     const params = new URLSearchParams();

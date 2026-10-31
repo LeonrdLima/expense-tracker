@@ -35,11 +35,24 @@
                 <strong class="card-value" id="balance">R$ 0,00</strong>
             </div>
         </section>
+        
+        <!-- Barra de Ferramentas para Mostrar/Esconder os Cards -->
+        <div class="toolbar">
+            <button type="button" class="btn-secondary" onclick="togglePanel('panel-import')">
+                Importar Extrato / Fatura
+            </button>
+            <button type="button" class="btn-secondary" onclick="togglePanel('panel-create')">
+                Nova Transação
+            </button>
+            <button type="button" class="btn-secondary" onclick="togglePanel('panel-filters')">
+                Filtros
+            </button>
+        </div>
 
         <!-- Seção de Ações: Importar Arquivo e Nova Transação -->
         <section class="two-columns-grid">
             <!-- Coluna 1: Importar Extrato / Fatura -->
-            <div class="panel">
+            <div class="panel hidden" id="panel-import">
                 <div class="panel-header">
                     <h2>Importar Extrato / Fatura</h2>
                 </div>
@@ -65,7 +78,7 @@
             </div>
 
             <!-- Coluna 2: Nova Transação Manual -->
-            <div class="panel">
+            <div class="panel hidden" id="panel-create">
                 <div class="panel-header">
                     <h2>Nova Transação</h2>
                     <button type="button" class="btn-secondary" id="btn-new-category">+ Categoria</button>
@@ -112,7 +125,7 @@
         </section>
 
         <!-- Seção de Filtros -->
-        <section class="panel">
+        <section class="panel hidden" id="panel-filters">
             <div class="panel-header">
                 <h2>Filtros</h2>
                 <button type="button" class="btn-secondary" id="btn-clear-filters">Limpar Filtros</button>
@@ -199,7 +212,7 @@
                             <th>Categoria</th>
                             <th>Tipo</th>
                             <th class="text-right">Valor</th>
-                            <th class="text-center">Ações</th>
+                            <th class="text-center">Ação</th>
                         </tr>
                     </thead>
                     <!-- O JavaScript vai preencher as linhas aqui dentro -->
