@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker - Controle Financeiro</title>
+    <!-- Conecta o nosso arquivo de estilos CSS -->
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1>Expense Tracker</h1>
+            <p>Painel de Controle Financeiro Pessoal</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Seção dos 3 Cards de Resumo -->
+        <section class="summary-grid">
+            <div class="card card-income">
+                <span class="card-label">Receitas</span>
+                <!-- O id="total-income" permite que o JavaScript encontre este elemento e troque o texto -->
+                <strong class="card-value" id="total-income">R$ 0,00</strong>
+            </div>
+
+            <div class="card card-expense">
+                <span class="card-label">Despesas</span>
+                <strong class="card-value" id="total-expense">R$ 0,00</strong>
+            </div>
+
+            <div class="card card-balance">
+                <span class="card-label">Saldo Líquido</span>
+                <strong class="card-value" id="balance">R$ 0,00</strong>
+            </div>
+        </section>
+
+        <!-- Seção de Ações: Importar Arquivo e Nova Transação -->
+        <section class="two-columns-grid">
+            <!-- Coluna 1: Importar Extrato / Fatura -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Importar Extrato / Fatura</h2>
+                </div>
+                <form id="import-form" class="stack-form">
+                    <div class="form-group">
+                        <label for="import-file">Arquivo (.csv, .pdf ou .ofx)</label>
+                        <input type="file" id="import-file" accept=".csv,.pdf,.ofx" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="import-institution">Instituição (opcional - detectada automaticamente)</label>
+                        <input type="text" id="import-institution" placeholder="Ex: Nubank, Caixa, Itaú...">
+                    </div>
+
+                    <label class="checkbox-group">
+                        <input type="checkbox" id="import-credit-card">
+                        <span>Fatura de Cartão de Crédito</span>
+                    </label>
+
+                    <button type="submit" class="btn-primary" id="btn-import">Importar Arquivo</button>
+                    <p id="import-feedback" class="feedback-msg"></p>
+                </form>
+            </div>
+
+            <!-- Coluna 2: Nova Transação Manual -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Nova Transação</h2>
+                    <button type="button" class="btn-secondary" id="btn-new-category">+ Categoria</button>
+                </div>
+                <form id="create-transaction-form" class="filter-grid">
+                    <div class="form-group">
+                        <label for="tx-description">Descrição</label>
+                        <input type="text" id="tx-description" placeholder="Ex: Almoço, Salário..." required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tx-amount">Valor (R$)</label>
+                        <input type="number" id="tx-amount" step="0.01" min="0.01" placeholder="0.00" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tx-date">Data</label>
+                        <input type="date" id="tx-date" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tx-type">Tipo</label>
+                        <select id="tx-type" required>
+                            <option value="EXPENSE">Despesa</option>
+                            <option value="INCOME">Receita</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tx-category">Categoria</label>
+                        <select id="tx-category" required></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tx-institution">Instituição</label>
+                        <input type="text" id="tx-institution" placeholder="Ex: Nubank, Caixa, Itaú..." required>
+                    </div>
+
+                    <div class="form-group form-actions">
+                        <button type="submit" class="btn-primary">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- Seção de Filtros -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2>Filtros</h2>
+                <button type="button" class="btn-secondary" id="btn-clear-filters">Limpar Filtros</button>
+            </div>
+
+            <form id="filter-form" class="filter-grid">
+                <div class="form-group">
+                    <label for="filter-start-date">Data Inicial</label>
+                    <input type="date" id="filter-start-date">
+                </div>
+
+                <div class="form-group">
+                    <label for="filter-end-date">Data Final</label>
+                    <input type="date" id="filter-end-date">
+                </div>
+
+                <div class="form-group">
+                    <label for="filter-category">Categoria</label>
+                    <select id="filter-category">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="filter-type">Tipo</label>
+                    <select id="filter-type">
+                        <option value="">Todos</option>
+                        <option value="INCOME">Receita</option>
+                        <option value="EXPENSE">Despesa</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="filter-institution">Instituição</label>
+                    <input type="text" id="filter-institution" placeholder="Ex: Nubank, Caixa, Itaú...">
+                </div>
+
+                <div class="form-group">
+                    <label for="filter-description"> Descrição</label>
+                    <input type="text" id="filter-description" placeholder="Buscar por nome...">
+                </div>
+
+                <div class="form-group form-actions">
+                    <button type="submit" class="btn-primary">Aplicar Filtros</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Seção de Gráficos -->
+        <section class="two-columns-grid">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Despesas por Categoria</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="category-chart"></canvas>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Evolução Mensal</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="evolution-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Seção da tabela de Transações -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2>Lançamentos</h2>
+                <span id="transactions-count" class="badge">0 itens</span>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="transactions-table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Descrição</th>
+                            <th>Instituição</th>
+                            <th>Categoria</th>
+                            <th>Tipo</th>
+                            <th class="text-right">Valor</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <!-- O JavaScript vai preencher as linhas aqui dentro -->
+                    <tbody id="transactions-body">
+                        <tr>
+                            <td colspan="7" class="empty-state">Carregando transações...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Seção de Projeção de Parcelas Futuras -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2>Projeção de Parcelas Futuras</h2>
+            </div>
+            <div id="installments-projection" class="installments-grid">
+                <p class="empty-state">Carregando projeção...</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Conecta o nosso arquivo JavaScript no final do body -->
+     <script src="app.js"></script>
+</body>
+</html>

@@ -41,9 +41,32 @@ public class InstitutionDetector {
         Map.entry("0208", "BTG Pactual")
     );
 
+    public String canonicalize(String rawInstitution) {
+        if (rawInstitution == null || rawInstitution.isBlank()) {
+            return null;
+        }
+        String matched = matchKeywords(rawInstitution);
+        if (matched != null) {
+            return matched;
+        }
+        String[] words = rawInstitution.trim().split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < words.length; i++) {
+            String w = words[i];
+            if (i > 0) sb.append(" ");
+            if (w.length() == 1) {
+                sb.append(w.toUpperCase());
+            } else {
+                sb.append(Character.toUpperCase(w.charAt(0)))
+                  .append(w.substring(1).toLowerCase());
+            }
+        }
+        return sb.toString();
+    }
+
     public String detectFromOfx(String content, String fileName, String explicitInstitution) {
         if (explicitInstitution != null && !explicitInstitution.isBlank()) {
-            return explicitInstitution.trim();
+            return canonicalize(explicitInstitution);
         }
 
         if (content != null) {
@@ -77,7 +100,7 @@ public class InstitutionDetector {
 
     public String detectFromPdf(List<String> lines, String fileName, String explicitInstitution) {
         if (explicitInstitution != null && !explicitInstitution.isBlank()) {
-            return explicitInstitution.trim();
+            return canonicalize(explicitInstitution);
         }
 
         String fromFileName = matchKeywords(fileName);
@@ -98,7 +121,7 @@ public class InstitutionDetector {
 
     public String detectFromCsv(List<String> lines, String fileName, String explicitInstitution) {
         if (explicitInstitution != null && !explicitInstitution.isBlank()) {
-            return explicitInstitution.trim();
+            return canonicalize(explicitInstitution);
         }
 
         String fromFileName = matchKeywords(fileName);

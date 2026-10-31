@@ -35,18 +35,23 @@ public class OfxImportService {
 
     @Transactional
     public List<Transaction> importOfx(FileUpload file) {
-        return importOfx(file, null);
+        return importOfx(file, false, null);
     }
 
     @Transactional
     public List<Transaction> importOfx(FileUpload file, String explicitInstitution) {
+        return importOfx(file, false, explicitInstitution);
+    }
+
+    @Transactional
+    public List<Transaction> importOfx(FileUpload file, boolean creditCardFlag, String explicitInstitution) {
         List<Transaction> transactions = new ArrayList<>();
         Category defaultCategory = categorizationService.findOrCreate("Outros");
 
         try {
             String content = Files.readString(file.filePath(), StandardCharsets.UTF_8);
             String detectedInstitution = institutionDetector.detectFromOfx(content, file.fileName(), explicitInstitution);
-            boolean isCreditCard = content.toUpperCase().contains("<CCSTMTTRNRS>") || content.toUpperCase().contains("CREDITCARD");
+            boolean isCreditCard = creditCardFlag || content.toUpperCase().contains("<CCSTMTTRNRS>") || content.toUpperCase().contains("CREDITCARD");
             Matcher blockMatcher = STMTTRN_BLOCK.matcher(content);
 
             while(blockMatcher.find()) {

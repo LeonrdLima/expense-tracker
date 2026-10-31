@@ -55,11 +55,16 @@ public class PdfImportService {
 
     @Transactional
     public List<Transaction> importPdf(FileUpload file) {
-        return importPdf(file, null);
+        return importPdf(file, false, null);
     }
 
     @Transactional
     public List<Transaction> importPdf(FileUpload file, String explicitInstitution) {
+        return importPdf(file, false, explicitInstitution);
+    }
+
+    @Transactional
+    public List<Transaction> importPdf(FileUpload file, boolean creditCardFlag, String explicitInstitution) {
         List<Transaction> transactions = new ArrayList<>();
         Category defaultCategory = categorizationService.findOrCreate("Outros");
         int fallbackYear = LocalDate.now().getYear();
@@ -180,7 +185,7 @@ public class PdfImportService {
                         transaction.category = catResult.category();
                         transaction.currentInstallment = currentInst;
                         transaction.totalInstallments = totalInst;
-                        transaction.isCreditCard = isNubankCreditCard;
+                        transaction.isCreditCard = isNubankCreditCard || creditCardFlag;
                         transaction.institution = (detectedInstitution != null) ? detectedInstitution : (isNubankCreditCard ? "Nubank" : null);
 
                         transactions.add(transaction);

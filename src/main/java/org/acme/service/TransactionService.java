@@ -43,6 +43,9 @@ public class TransactionService {
     @Inject
     CategorizationService categorizationService;
 
+    @Inject
+    InstitutionDetector institutionDetector;
+
     @Transactional 
     public Transaction create(TransactionRequestDTO dto) {
         Category category = Category.findById(dto.categoryId);
@@ -60,7 +63,9 @@ public class TransactionService {
         transaction.currentInstallment = dto.currentInstallment;
         transaction.totalInstallments = dto.totalInstallments;
         transaction.isCreditCard = Boolean.TRUE.equals(dto.isCreditCard);
-        transaction.institution = dto.institution;
+        transaction.institution = institutionDetector != null
+            ? institutionDetector.canonicalize(dto.institution)
+            : dto.institution;
         transaction.persist();
 
         return transaction;
@@ -171,8 +176,11 @@ public class TransactionService {
         }
 
         if(filter.institution != null && !filter.institution.isBlank()) {
+            String canonicalInst = (institutionDetector != null)
+                ? institutionDetector.canonicalize(filter.institution)
+                : filter.institution.trim();
             conditions.add("lower(institution) = :institution");
-            params.put("institution", filter.institution.trim().toLowerCase());
+            params.put("institution", canonicalInst.toLowerCase());
         }
 
         if(conditions.isEmpty()) {
@@ -271,7 +279,9 @@ public class TransactionService {
             transaction.isCreditCard = dto.isCreditCard;
         }
         if(dto.institution != null) {
-            transaction.institution = dto.institution;
+            transaction.institution = institutionDetector != null
+                ? institutionDetector.canonicalize(dto.institution)
+                : dto.institution;
         }
 
         return transaction;
@@ -298,7 +308,9 @@ public class TransactionService {
             transaction.transactionType = dto.transactionType;
         }
         if(dto.institution != null) {
-            transaction.institution = dto.institution;
+            transaction.institution = institutionDetector != null
+                ? institutionDetector.canonicalize(dto.institution)
+                : dto.institution;
         }
 
         return transaction;
@@ -409,9 +421,12 @@ public class TransactionService {
 
         List<Transaction> installmentTxs;
         if(institution != null && !institution.isBlank()) {
+            String canonicalInst = (institutionDetector != null)
+                ? institutionDetector.canonicalize(institution)
+                : institution.trim();
             installmentTxs = Transaction.list(
                 "currentInstallment is not null and totalInstallments is not null and totalInstallments > 1 and lower(institution) = ?1",
-                institution.trim().toLowerCase()
+                canonicalInst.toLowerCase()
             );
         } else {
             installmentTxs = Transaction.list(
@@ -435,6 +450,7 @@ public class TransactionService {
         }
 
         Map<YearMonth, List<InstallmentProjectionItemDTO>> projectedByMonth = new TreeMap<>();
+        YearMonth currentMonth = YearMonth.now();
 
         for(Transaction latest : latestByPurchase.values()) {
             if(latest.currentInstallment >= latest.totalInstallments || latest.date == null) {
@@ -446,13 +462,24 @@ public class TransactionService {
                 : "";
             String categoryName = latest.category != null ? latest.category.name : "Outros";
 
-            int remaining = latest.totalInstallments - latest.currentInstallment;
-            int maxOffset = Math.min(remaining, months);
+            // Bancos como a Caixa mantêm a data original da compra (1ª parcela) em todas as faturas.
+            // Se a data da transação está em um mês anterior ao atual e currentInstallment > 1,
+            // calculamos a data de competência da parcela atual somando (currentInstallment - 1) meses.
+            YearMonth txMonth = YearMonth.from(latest.date);
+            LocalDate currentInstallmentDate = (latest.currentInstallment > 1 && txMonth.isBefore(currentMonth))
+                ? latest.date.plusMonths(latest.currentInstallment - 1)
+                : latest.date;
 
-            for(int offset = 1; offset <= maxOffset; offset++) {
+            int remaining = latest.totalInstallments - latest.currentInstallment;
+
+            for(int offset = 1; offset <= remaining; offset++) {
                 int nextInst = latest.currentInstallment + offset;
-                LocalDate projectedDate = latest.date.plusMonths(offset);
+                LocalDate projectedDate = currentInstallmentDate.plusMonths(offset);
                 YearMonth ym = YearMonth.from(projectedDate);
+
+                if(ym.isBefore(currentMonth)) {
+                    continue;
+                }
 
                 InstallmentProjectionItemDTO item = new InstallmentProjectionItemDTO(
                     baseDesc + " - Parcela " + nextInst + "/" + latest.totalInstallments,

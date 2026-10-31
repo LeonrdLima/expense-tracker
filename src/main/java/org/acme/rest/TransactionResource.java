@@ -120,8 +120,12 @@ public class TransactionResource {
         summary = "Importar extrato ou fatura PDF",
         description = "Extrai transações de faturas ou extratos bancários em formato PDF, identificando parcelas, estornos e instituição financeira."
     )
-    public Response importPdf(ImportFileDTO form, @QueryParam("institution") String institution) {
-        List<Transaction> transactions = pdfImportService.importPdf(form.file, institution);
+    public Response importPdf(
+        ImportFileDTO form,
+        @QueryParam("creditCard") boolean creditCard,
+        @QueryParam("institution") String institution
+    ) {
+        List<Transaction> transactions = pdfImportService.importPdf(form.file, creditCard, institution);
         List<Transaction> saved = transactionService.persistUnique(transactions);
         return Response.status(Response.Status.CREATED).entity(saved).build();
     }
@@ -133,8 +137,12 @@ public class TransactionResource {
         summary = "Importar extrato ou fatura OFX",
         description = "Importa transações de arquivos OFX (Open Financial Exchange), identificando parcelas, cartão de crédito e instituição financeira."
     )
-    public Response importOfx(ImportFileDTO form, @QueryParam("institution") String institution) {
-        List<Transaction> transactions = ofxImportService.importOfx(form.file, institution);
+    public Response importOfx(
+        ImportFileDTO form,
+        @QueryParam("creditCard") boolean creditCard,
+        @QueryParam("institution") String institution
+    ) {
+        List<Transaction> transactions = ofxImportService.importOfx(form.file, creditCard, institution);
         List<Transaction> saved = transactionService.persistUnique(transactions);
         return Response.status(Response.Status.CREATED).entity(saved).build();
 
