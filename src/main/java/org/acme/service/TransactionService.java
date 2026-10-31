@@ -3,10 +3,15 @@ package org.acme.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 
 import org.acme.exception.CategoryNotFoundException;
 import org.acme.exception.InvalidFilterException;
@@ -15,16 +20,28 @@ import org.acme.model.Category;
 import org.acme.model.Transaction;
 import org.acme.model.TransactionType;
 import org.acme.rest.dto.CategorySummaryDTO;
+import org.acme.rest.dto.InstallmentProjectionItemDTO;
+import org.acme.rest.dto.InstallmentProjectionMonthDTO;
+import org.acme.rest.dto.MonthlyEvolutionDTO;
+import org.acme.rest.dto.PagedResponseDTO;
 import org.acme.rest.dto.SummaryResponseDTO;
 import org.acme.rest.dto.TransactionFilterDTO;
 import org.acme.rest.dto.TransactionPatchDTO;
 import org.acme.rest.dto.TransactionRequestDTO;
 
+import io.quarkus.hibernate.orm.panache.PanacheQuery;
+import io.quarkus.panache.common.Page;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 @ApplicationScoped 
 public class TransactionService {
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("date", "amount", "description", "id");
+
+    @Inject
+    CategorizationService categorizationService;
 
     @Transactional 
     public Transaction create(TransactionRequestDTO dto) {
@@ -61,8 +78,42 @@ public class TransactionService {
     }
 
     public List<Transaction> list(TransactionFilterDTO filter) {
+        PanacheQuery<Transaction> panacheQuery = buildPanacheQuery(filter);
+        if(filter != null && (filter.page != null || filter.size != null)) {
+            int page = (filter.page != null) ? filter.page : 0;
+            int size = (filter.size != null) ? filter.size : 20;
+            validatePagination(page, size);
+            return panacheQuery.page(Page.of(page, size)).list();
+        }
+        return panacheQuery.list();
+    }
+
+    public PagedResponseDTO<Transaction> listPaged(TransactionFilterDTO filter) {
+        int page = (filter != null && filter.page != null) ? filter.page : 0;
+        int size = (filter != null && filter.size != null) ? filter.size : 20;
+        validatePagination(page, size);
+
+        PanacheQuery<Transaction> panacheQuery = buildPanacheQuery(filter);
+        long totalElements = panacheQuery.count();
+        List<Transaction> content = panacheQuery.page(Page.of(page, size)).list();
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+
+        return new PagedResponseDTO<>(content, page, size, totalElements, totalPages);
+    }
+
+    private void validatePagination(int page, int size) {
+        if(page < 0) {
+            throw new InvalidFilterException("O índice da página não pode ser negativo");
+        }
+        if(size <= 0 || size > 500) {
+            throw new InvalidFilterException("O tamanho da página deve estar entre 1 e 500");
+        }
+    }
+
+    private PanacheQuery<Transaction> buildPanacheQuery(TransactionFilterDTO filter) {
+        String orderByClause = resolveOrderByClause(filter);
         if(filter == null) {
-            return Transaction.list("order by date desc");
+            return Transaction.find(orderByClause);
         }
 
         LocalDate effectiveStart = filter.startDate;
@@ -125,11 +176,29 @@ public class TransactionService {
         }
 
         if(conditions.isEmpty()) {
-            return Transaction.list("order by date desc");
+            return Transaction.find(orderByClause);
         }
 
-        String query = String.join(" and ", conditions) + " order by date desc";
-        return Transaction.list(query, params);
+        String query = String.join(" and ", conditions) + " " + orderByClause;
+        return Transaction.find(query, params);
+    }
+
+    private String resolveOrderByClause(TransactionFilterDTO filter) {
+        String sortBy = (filter != null && filter.sortBy != null && !filter.sortBy.isBlank())
+            ? filter.sortBy.trim()
+            : "date";
+        if(!ALLOWED_SORT_FIELDS.contains(sortBy)) {
+            throw new InvalidFilterException("Campo de ordenação inválido: " + sortBy + ". Permitidos: date, amount, description, id");
+        }
+
+        String sortDir = (filter != null && filter.sortDir != null && !filter.sortDir.isBlank())
+            ? filter.sortDir.trim().toLowerCase()
+            : "desc";
+        if(!sortDir.equals("asc") && !sortDir.equals("desc")) {
+            throw new InvalidFilterException("Direção de ordenação inválida: " + sortDir + ". Use asc ou desc");
+        }
+
+        return "order by " + sortBy + " " + sortDir;
     }
 
     public SummaryResponseDTO calculateSummary(Integer year, Integer month) {
@@ -140,7 +209,7 @@ public class TransactionService {
     }
 
     public SummaryResponseDTO calculateSummary(TransactionFilterDTO filter) {
-        List<Transaction> transactions = list(filter);
+        List<Transaction> transactions = buildPanacheQuery(filter).list();
 
         BigDecimal totalIncome = BigDecimal.ZERO;
         BigDecimal totalExpense = BigDecimal.ZERO;
@@ -243,7 +312,7 @@ public class TransactionService {
     }
 
     public List<CategorySummaryDTO> getExpensesByCategory(TransactionFilterDTO filter) {
-        List<Transaction> transactions = list(filter);
+        List<Transaction> transactions = buildPanacheQuery(filter).list();
         Map<String, BigDecimal> categoryExpenses = new HashMap<>();
         Map<String, BigDecimal> categoryRefunds = new HashMap<>();
 
@@ -293,6 +362,135 @@ public class TransactionService {
         }
 
         return result;        
+    }
+
+    public List<MonthlyEvolutionDTO> getMonthlyEvolution(TransactionFilterDTO filter) {
+        List<Transaction> transactions = buildPanacheQuery(filter).list();
+        Map<YearMonth, List<Transaction>> byMonth = new TreeMap<>();
+
+        for(Transaction t : transactions) {
+            if(t.date == null) continue;
+            YearMonth ym = YearMonth.from(t.date);
+            byMonth.computeIfAbsent(ym, k -> new ArrayList<>()).add(t);
+        }
+
+        List<MonthlyEvolutionDTO> result = new ArrayList<>();
+        for(Map.Entry<YearMonth, List<Transaction>> entry : byMonth.entrySet()) {
+            YearMonth ym = entry.getKey();
+            List<Transaction> monthTxs = entry.getValue();
+            BigDecimal income = BigDecimal.ZERO;
+            BigDecimal expense = BigDecimal.ZERO;
+
+            for(Transaction t : monthTxs) {
+                if(t.transactionType == TransactionType.INCOME) {
+                    income = income.add(t.amount);
+                } else if(t.transactionType == TransactionType.EXPENSE) {
+                    expense = expense.add(t.amount);
+                }
+            }
+
+            result.add(new MonthlyEvolutionDTO(
+                ym.getYear(),
+                ym.getMonthValue(),
+                income,
+                expense,
+                income.subtract(expense),
+                monthTxs.size()
+            ));
+        }
+
+        return result;
+    }
+
+    public List<InstallmentProjectionMonthDTO> getInstallmentProjection(int months, String institution) {
+        if(months < 1 || months > 60) {
+            throw new InvalidFilterException("O número de meses para projeção deve estar entre 1 e 60");
+        }
+
+        List<Transaction> installmentTxs;
+        if(institution != null && !institution.isBlank()) {
+            installmentTxs = Transaction.list(
+                "currentInstallment is not null and totalInstallments is not null and totalInstallments > 1 and lower(institution) = ?1",
+                institution.trim().toLowerCase()
+            );
+        } else {
+            installmentTxs = Transaction.list(
+                "currentInstallment is not null and totalInstallments is not null and totalInstallments > 1"
+            );
+        }
+
+        // Agrupa compras parceladas pela assinatura base (descrição sem parcela + valor + totalInstallments)
+        // mantendo apenas a parcela mais recente registrada de cada compra
+        Map<String, Transaction> latestByPurchase = new LinkedHashMap<>();
+        for(Transaction t : installmentTxs) {
+            String baseDesc = (categorizationService != null)
+                ? categorizationService.cleanForMatching(t.description)
+                : (t.description != null ? t.description.toLowerCase().trim() : "");
+            String signature = baseDesc + "|" + t.amount.stripTrailingZeros().toPlainString() + "|" + t.totalInstallments;
+
+            Transaction existing = latestByPurchase.get(signature);
+            if(existing == null || t.currentInstallment > existing.currentInstallment) {
+                latestByPurchase.put(signature, t);
+            }
+        }
+
+        Map<YearMonth, List<InstallmentProjectionItemDTO>> projectedByMonth = new TreeMap<>();
+
+        for(Transaction latest : latestByPurchase.values()) {
+            if(latest.currentInstallment >= latest.totalInstallments || latest.date == null) {
+                continue;
+            }
+
+            String baseDesc = latest.description != null
+                ? latest.description.replaceAll("(?i)\\s*-\\s*parcela\\s+\\d+/\\d+$", "").trim()
+                : "";
+            String categoryName = latest.category != null ? latest.category.name : "Outros";
+
+            int remaining = latest.totalInstallments - latest.currentInstallment;
+            int maxOffset = Math.min(remaining, months);
+
+            for(int offset = 1; offset <= maxOffset; offset++) {
+                int nextInst = latest.currentInstallment + offset;
+                LocalDate projectedDate = latest.date.plusMonths(offset);
+                YearMonth ym = YearMonth.from(projectedDate);
+
+                InstallmentProjectionItemDTO item = new InstallmentProjectionItemDTO(
+                    baseDesc + " - Parcela " + nextInst + "/" + latest.totalInstallments,
+                    categoryName,
+                    latest.institution,
+                    nextInst,
+                    latest.totalInstallments,
+                    latest.amount,
+                    projectedDate
+                );
+
+                projectedByMonth.computeIfAbsent(ym, k -> new ArrayList<>()).add(item);
+            }
+        }
+
+        List<InstallmentProjectionMonthDTO> response = new ArrayList<>();
+        int countMonths = 0;
+        for(Map.Entry<YearMonth, List<InstallmentProjectionItemDTO>> entry : projectedByMonth.entrySet()) {
+            if(countMonths >= months) break;
+            YearMonth ym = entry.getKey();
+            List<InstallmentProjectionItemDTO> items = entry.getValue();
+            items.sort(Comparator.comparing(InstallmentProjectionItemDTO::projectedDate));
+
+            BigDecimal totalCommitted = items.stream()
+                .map(InstallmentProjectionItemDTO::amount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            response.add(new InstallmentProjectionMonthDTO(
+                ym.getYear(),
+                ym.getMonthValue(),
+                totalCommitted,
+                items.size(),
+                items
+            ));
+            countMonths++;
+        }
+
+        return response;
     }
 
     private boolean isRefund(String description) {

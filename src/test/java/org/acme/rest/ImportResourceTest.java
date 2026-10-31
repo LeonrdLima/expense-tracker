@@ -150,4 +150,23 @@ public class ImportResourceTest {
             .body("find { it.description.contains('recebida pelo Pix') }.transactionType", equalTo("INCOME"))
             .body("find { it.description.contains('recebida pelo Pix') }.isCreditCard", equalTo(false));
     }
+
+    @Test
+    @DisplayName("Deve priorizar o queryParam institution explícito na importação de CSV e OFX")
+    void shouldPrioritizeExplicitInstitutionQueryParam() {
+        String csvContent = """
+            Data;Descrição;Valor
+            18/10/2026;Padaria Central;-35,00
+            """;
+
+        given()
+            .queryParam("institution", "Sicredi")
+            .multiPart("file", "extrato_generico.csv", csvContent.getBytes(StandardCharsets.UTF_8), "text/csv")
+        .when()
+            .post("/transactions/import/csv")
+        .then()
+            .statusCode(201)
+            .body("size()", is(1))
+            .body("[0].institution", equalTo("Sicredi"));
+    }
 }

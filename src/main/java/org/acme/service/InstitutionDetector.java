@@ -181,6 +181,7 @@ public class InstitutionDetector {
     private String normalize(String text) {
         return Normalizer.normalize(text, Normalizer.Form.NFD)
                          .replaceAll("\\p{M}", "")
+                         .replaceAll("[_\\-]+", " ")
                          .toLowerCase()
                          .trim();
     }

@@ -34,4 +34,16 @@ public class TransactionFilterDTO {
 
     @QueryParam("institution")
     public String institution;
+
+    @QueryParam("page")
+    public Integer page;
+
+    @QueryParam("size")
+    public Integer size;
+
+    @QueryParam("sortBy")
+    public String sortBy;
+
+    @QueryParam("sortDir")
+    public String sortDir;
 }
